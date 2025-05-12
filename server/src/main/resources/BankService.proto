@@ -1,28 +1,116 @@
 syntax = "proto3";
- option java_multiple_files = true;
- package ds.tutorial.communication.grpc.generated;
+option java_multiple_files = true;
+package ds.tutorial.communication.grpc.generated;
 
- message CheckBalanceRequest {
-    string accountId = 1;
- }
-
- message CheckBalanceResponse {
-    double balance = 1;
- }
-
- service BalanceService {
-    rpc checkBalance(CheckBalanceRequest) returns (CheckBalanceResponse);
- }
-
-message SetBalanceRequest {
-    string accountId = 1;
-    double value = 2;
-    bool isSentByPrimary = 3;
-}
-message SetBalanceResponse {
-    bool status = 1;
+// Concert Show representation
+message ConcertShow {
+  string id = 1;
+  string name = 2;
+  string date = 3;
+  string venue = 4;
+  string description = 5;
+  bool hasAfterParty = 6;
+  repeated SeatTier seatTiers = 7;
+  int32 afterPartyTickets = 8;
 }
 
-service SetBalanceService {
-    rpc setBalance(SetBalanceRequest) returns (SetBalanceResponse);
+// Seat tier representation
+message SeatTier {
+  string type = 1;  // e.g., "Regular", "VIP"
+  double price = 2;
+  int32 available = 3;
+}
+
+// Request to add a new concert
+message AddConcertRequest {
+  ConcertShow show = 1;
+  bool isSentByPrimary = 2;
+}
+
+// Response after adding a concert
+message AddConcertResponse {
+  bool status = 1;
+  string message = 2;
+}
+
+// Request to update a concert
+message UpdateConcertRequest {
+  string showId = 1;
+  ConcertShow updatedShow = 2;
+  bool isSentByPrimary = 3;
+}
+
+// Response after updating a concert
+message UpdateConcertResponse {
+  bool status = 1;
+  string message = 2;
+}
+
+// Request to cancel a concert
+message CancelConcertRequest {
+  string showId = 1;
+  bool isSentByPrimary = 2;
+}
+
+// Response after canceling a concert
+message CancelConcertResponse {
+  bool status = 1;
+  string message = 2;
+}
+
+// Request to list all concerts
+message ListConcertsRequest {
+}
+
+// Response with all concerts
+message ListConcertsResponse {
+  repeated ConcertShow shows = 1;
+}
+
+// Request to make a ticket reservation
+message ReserveTicketRequest {
+  string showId = 1;
+  string seatType = 2;
+  int32 quantity = 3;
+  bool includeAfterParty = 4;
+  bool isSentByPrimary = 5;
+  string customerId = 6;
+}
+
+// Response after reserving tickets
+message ReserveTicketResponse {
+  bool status = 1;
+  string reservationId = 2;
+  string message = 3;
+}
+
+// Request to update ticket stock (by box office)
+message UpdateTicketStockRequest {
+  string showId = 1;
+  string seatType = 2;
+  int32 additionalTickets = 3;
+  int32 additionalAfterPartyTickets = 4;
+  bool isSentByPrimary = 5;
+}
+
+// Response after updating ticket stock
+message UpdateTicketStockResponse {
+  bool status = 1;
+  string message = 2;
+}
+
+// Service definitions
+service ConcertOrganizerService {
+  rpc addConcert(AddConcertRequest) returns (AddConcertResponse);
+  rpc updateConcert(UpdateConcertRequest) returns (UpdateConcertResponse);
+  rpc cancelConcert(CancelConcertRequest) returns (CancelConcertResponse);
+}
+
+service BoxOfficeService {
+  rpc updateTicketStock(UpdateTicketStockRequest) returns (UpdateTicketStockResponse);
+}
+
+service CustomerService {
+  rpc listConcerts(ListConcertsRequest) returns (ListConcertsResponse);
+  rpc reserveTicket(ReserveTicketRequest) returns (ReserveTicketResponse);
 }
