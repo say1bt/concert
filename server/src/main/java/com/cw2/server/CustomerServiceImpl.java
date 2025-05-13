@@ -1,4 +1,4 @@
-package ds.communication.tutorial.server;
+package com.cw2.server;
 
 import ds.tutorial.communication.grpc.generated.*;
 import ds.tutorial.synchronization.processs.DistributedTxCoordinator;

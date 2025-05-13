@@ -1,4 +1,4 @@
-package ds.tutorials.communication.client;
+package com.cw2.client;
 
 import ds.tutorial.communication.grpc.generated.*;
 import io.grpc.ManagedChannel;
@@ -6,15 +6,13 @@ import io.grpc.ManagedChannelBuilder;
 
 import java.util.Scanner;
 
-
-public class BoxOfficeClient {
+public class BulkBookingClient {
     private ManagedChannel channel = null;
-    private BoxOfficeServiceGrpc.BoxOfficeServiceBlockingStub boxOfficeStub = null;
     private CustomerServiceGrpc.CustomerServiceBlockingStub customerStub = null;
     private String host = null;
     private int port = -1;
 
-    public BoxOfficeClient(String host, int port) {
+    public BulkBookingClient(String host, int port) {
         this.host = host;
         this.port = port;
     }
@@ -24,7 +22,6 @@ public class BoxOfficeClient {
         channel = ManagedChannelBuilder.forAddress("localhost", port)
                 .usePlaintext()
                 .build();
-        boxOfficeStub = BoxOfficeServiceGrpc.newBlockingStub(channel);
         customerStub = CustomerServiceGrpc.newBlockingStub(channel);
     }
 
@@ -36,11 +33,11 @@ public class BoxOfficeClient {
         Scanner userInput = new Scanner(System.in);
         while (true) {
             System.out.println("\n=============================================");
-            System.out.println("CONCERT BOOKING SYSTEM - BOX OFFICE MENU");
+            System.out.println("CONCERT BOOKING SYSTEM - EVENT COORDINATOR MENU");
             System.out.println("=============================================");
             System.out.println("1. View available concerts");
             System.out.println("2. View concert details");
-            System.out.println("3. Update concert ticket stock");
+            System.out.println("3. Book bulk tickets for groups");
             System.out.println("0. Exit");
             System.out.print("Enter your choice: ");
 
@@ -56,7 +53,7 @@ public class BoxOfficeClient {
                     viewConcertDetails(userInput);
                     break;
                 case 3:
-                    updateTicketStock(userInput);
+                    bookBulkTickets(userInput);
                     break;
                 default:
                     System.out.println("Invalid choice. Please try again.");
@@ -93,22 +90,18 @@ public class BoxOfficeClient {
         System.out.print("Enter concert ID: ");
         String showId = userInput.nextLine().trim();
 
-        
-        ListConcertsRequest listRequest = ListConcertsRequest.newBuilder().build();
-        ListConcertsResponse listResponse = customerStub.listConcerts(listRequest);
+        GetConcertRequest request = GetConcertRequest.newBuilder()
+                .setShowId(showId)
+                .build();
 
-        ConcertShow show = null;
-        for (ConcertShow concert : listResponse.getShowsList()) {
-            if (concert.getId().equals(showId)) {
-                show = concert;
-                break;
-            }
-        }
+        GetConcertResponse response = customerStub.getConcert(request);
 
-        if (show == null) {
+        if (response.getShow() == null || response.getShow().getId().isEmpty()) {
             System.out.println("Concert not found with ID: " + showId);
             return;
         }
+
+        ConcertShow show = response.getShow();
 
         System.out.println("\nCONCERT DETAILS");
         System.out.println("====================");
@@ -117,7 +110,7 @@ public class BoxOfficeClient {
         System.out.println("Venue: " + show.getVenue());
         System.out.println("Description: " + show.getDescription());
 
-        System.out.println("\nSEAT TIERS AND AVAILABILITY");
+        System.out.println("\nAVAILABLE SEAT TIERS");
         System.out.println("====================");
         for (SeatTier tier : show.getSeatTiersList()) {
             System.out.println(tier.getType() + " - "
@@ -132,98 +125,129 @@ public class BoxOfficeClient {
         }
     }
 
-    private void updateTicketStock(Scanner userInput) {
-        System.out.println("\n--- UPDATE TICKET STOCK ---");
+    private void bookBulkTickets(Scanner userInput) {
+        System.out.println("\n--- BULK TICKET BOOKING FOR GROUPS ---");
         System.out.print("Enter concert ID: ");
         String showId = userInput.nextLine().trim();
 
         
-        ListConcertsRequest listRequest = ListConcertsRequest.newBuilder().build();
-        ListConcertsResponse listResponse = customerStub.listConcerts(listRequest);
+        GetConcertRequest getConcertRequest = GetConcertRequest.newBuilder()
+                .setShowId(showId)
+                .build();
 
-        ConcertShow show = null;
-        for (ConcertShow concert : listResponse.getShowsList()) {
-            if (concert.getId().equals(showId)) {
-                show = concert;
-                break;
-            }
-        }
+        GetConcertResponse getConcertResponse = customerStub.getConcert(getConcertRequest);
 
-        if (show == null) {
+        if (getConcertResponse.getShow() == null || getConcertResponse.getShow().getId().isEmpty()) {
             System.out.println("Concert not found with ID: " + showId);
             return;
         }
 
+        ConcertShow show = getConcertResponse.getShow();
+
+        System.out.print("Enter group name or organization: ");
+        String groupName = userInput.nextLine().trim();
+
         
-        System.out.println("\nCurrent seat tiers and availability:");
+        System.out.println("\nAvailable seat tiers:");
         for (int i = 0; i < show.getSeatTiersCount(); i++) {
             SeatTier tier = show.getSeatTiers(i);
             System.out.println((i+1) + ". " + tier.getType() +
-                    " - " + tier.getAvailable() + " seats available");
+                    " - " + tier.getAvailable() + " seats available at $" +
+                    String.format("%.2f", tier.getPrice()));
         }
 
-        System.out.print("Enter seat type to update: ");
+        System.out.print("Enter seat type: ");
         String seatType = userInput.nextLine().trim();
 
+        System.out.print("Enter number of tickets for the group: ");
+        int quantity = Integer.parseInt(userInput.nextLine().trim());
+
+        boolean includeAfterParty = false;
+
+        if (show.getHasAfterParty() && show.getAfterPartyTickets() > 0) {
+            System.out.print("Would you like to include after-party tickets for the group? (yes/no): ");
+            includeAfterParty = userInput.nextLine().trim().equalsIgnoreCase("yes");
+        }
+
         
-        boolean validSeatType = false;
+        double totalCost = 0.0;
+
+        boolean foundTier = false;
         for (SeatTier tier : show.getSeatTiersList()) {
             if (tier.getType().equalsIgnoreCase(seatType)) {
-                validSeatType = true;
+                totalCost += tier.getPrice() * quantity;
+                foundTier = true;
                 break;
             }
         }
 
-        if (!validSeatType) {
+        if (!foundTier) {
             System.out.println("Error: Seat type '" + seatType + "' not found.");
             return;
         }
 
-        System.out.print("Enter number of additional tickets (use negative for removals): ");
-        int additionalTickets = Integer.parseInt(userInput.nextLine().trim());
-
-        int additionalAfterPartyTickets = 0;
-        if (show.getHasAfterParty()) {
-            System.out.println("Current after-party tickets: " + show.getAfterPartyTickets());
-            System.out.print("Enter number of additional after-party tickets (use negative for removals): ");
-            additionalAfterPartyTickets = Integer.parseInt(userInput.nextLine().trim());
+        
+        double discountRate = 0.0;
+        if (quantity >= 20) {
+            discountRate = 0.15; 
+        } else if (quantity >= 10) {
+            discountRate = 0.10; 
+        } else if (quantity >= 5) {
+            discountRate = 0.05; 
         }
+
+        double discountAmount = totalCost * discountRate;
+        double discountedTotal = totalCost - discountAmount;
 
         
-        System.out.println("\nUPDATE SUMMARY");
+        System.out.println("\nBULK BOOKING SUMMARY");
         System.out.println("====================");
         System.out.println("Concert: " + show.getName());
+        System.out.println("Date: " + show.getDate());
+        System.out.println("Group Name: " + groupName);
         System.out.println("Seat Type: " + seatType);
-        System.out.println("Additional Tickets: " + additionalTickets);
+        System.out.println("Number of Tickets: " + quantity);
 
-        if (show.getHasAfterParty()) {
-            System.out.println("Additional After-Party Tickets: " + additionalAfterPartyTickets);
+        if (includeAfterParty) {
+            System.out.println("After-Party Tickets: Included");
         }
 
-        System.out.print("\nConfirm update? (yes/no): ");
+        System.out.println("Subtotal: $" + String.format("%.2f", totalCost));
+        if (discountRate > 0) {
+            System.out.println("Group Discount (" + (discountRate * 100) + "%): -$" + String.format("%.2f", discountAmount));
+            System.out.println("Total Cost: $" + String.format("%.2f", discountedTotal));
+        } else {
+            System.out.println("Total Cost: $" + String.format("%.2f", totalCost));
+        }
+
+        System.out.print("\nConfirm bulk booking? (yes/no): ");
         String confirmation = userInput.nextLine().trim();
 
         if (!confirmation.equalsIgnoreCase("yes")) {
-            System.out.println("Update cancelled.");
+            System.out.println("Booking cancelled.");
             return;
         }
 
         
-        UpdateTicketStockRequest request = UpdateTicketStockRequest.newBuilder()
+        
+        String customerId = "GROUP-" + groupName.replaceAll("\\s+", "-") + "-" + System.currentTimeMillis();
+
+        ReserveTicketRequest request = ReserveTicketRequest.newBuilder()
                 .setShowId(showId)
                 .setSeatType(seatType)
-                .setAdditionalTickets(additionalTickets)
-                .setAdditionalAfterPartyTickets(additionalAfterPartyTickets)
+                .setQuantity(quantity)
+                .setIncludeAfterParty(includeAfterParty)
                 .setIsSentByPrimary(false)
+                .setCustomerId(customerId)
                 .build();
 
-        System.out.println("Sending update request...");
-        UpdateTicketStockResponse response = boxOfficeStub.updateTicketStock(request);
+        System.out.println("Sending bulk booking request...");
+        ReserveTicketResponse response = customerStub.reserveTicket(request);
 
         if (response.getStatus()) {
-            System.out.println("Ticket stock update successful!");
+            System.out.println("Bulk booking successful! Reservation ID: " + response.getReservationId());
         } else {
-            System.out.println("Ticket stock update failed: " + response.getMessage());
+            System.out.println("Bulk booking failed: " + response.getMessage());
         }
     }
 }

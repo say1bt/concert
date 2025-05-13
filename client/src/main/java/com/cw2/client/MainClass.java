@@ -1,4 +1,4 @@
-package ds.tutorials.communication.client;
+package com.cw2.client;
 
 
 public class MainClass {

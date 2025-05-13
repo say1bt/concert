@@ -1,4 +1,4 @@
-package ds.tutorials.communication.client;
+package com.cw2.client;
 
 import ds.tutorial.communication.grpc.generated.*;
 import io.grpc.ManagedChannel;

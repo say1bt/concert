@@ -1,4 +1,4 @@
-package ds.communication.tutorial.server;
+package com.cw2.server;
 
 import ds.tutorial.communication.grpc.generated.*;
 import ds.tutorial.synchronization.processs.DistributedTxCoordinator;
@@ -6,7 +6,6 @@ import ds.tutorial.synchronization.processs.DistributedTxListner;
 import ds.tutorial.synchronization.processs.DistributedTxParticipant;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import javafx.util.Pair;
 import org.apache.zookeeper.KeeperException;
 
 import java.io.IOException;

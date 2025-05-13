@@ -1,4 +1,4 @@
-package ds.tutorials.communication.client;
+package com.cw2.client;
 
 import ds.tutorial.communication.grpc.generated.*;
 import io.grpc.ManagedChannel;
@@ -6,13 +6,15 @@ import io.grpc.ManagedChannelBuilder;
 
 import java.util.Scanner;
 
-public class BulkBookingClient {
+public class TicketBookingClient {
     private ManagedChannel channel = null;
-    private CustomerServiceGrpc.CustomerServiceBlockingStub customerStub = null;
-    private String host = null;
-    private int port = -1;
+    CustomerServiceGrpc.CustomerServiceBlockingStub customerStub = null;
+    ConcertOrganizerServiceGrpc.ConcertOrganizerServiceBlockingStub organizerStub = null;
+    BoxOfficeServiceGrpc.BoxOfficeServiceBlockingStub boxOfficeStub = null;
+    String host = null;
+    int port = -1;
 
-    public BulkBookingClient(String host, int port) {
+    public TicketBookingClient(String host, int port) {
         this.host = host;
         this.port = port;
     }
@@ -23,6 +25,8 @@ public class BulkBookingClient {
                 .usePlaintext()
                 .build();
         customerStub = CustomerServiceGrpc.newBlockingStub(channel);
+        organizerStub = ConcertOrganizerServiceGrpc.newBlockingStub(channel);
+        boxOfficeStub = BoxOfficeServiceGrpc.newBlockingStub(channel);
     }
 
     public void closeConnection() {
@@ -33,11 +37,11 @@ public class BulkBookingClient {
         Scanner userInput = new Scanner(System.in);
         while (true) {
             System.out.println("\n=============================================");
-            System.out.println("CONCERT BOOKING SYSTEM - EVENT COORDINATOR MENU");
+            System.out.println("CONCERT TICKET BOOKING SYSTEM - CUSTOMER MENU");
             System.out.println("=============================================");
             System.out.println("1. View available concerts");
             System.out.println("2. View concert details");
-            System.out.println("3. Book bulk tickets for groups");
+            System.out.println("3. Reserve tickets");
             System.out.println("0. Exit");
             System.out.print("Enter your choice: ");
 
@@ -53,7 +57,7 @@ public class BulkBookingClient {
                     viewConcertDetails(userInput);
                     break;
                 case 3:
-                    bookBulkTickets(userInput);
+                    reserveTickets(userInput);
                     break;
                 default:
                     System.out.println("Invalid choice. Please try again.");
@@ -90,18 +94,22 @@ public class BulkBookingClient {
         System.out.print("Enter concert ID: ");
         String showId = userInput.nextLine().trim();
 
-        GetConcertRequest request = GetConcertRequest.newBuilder()
-                .setShowId(showId)
-                .build();
+        
+        ListConcertsRequest listRequest = ListConcertsRequest.newBuilder().build();
+        ListConcertsResponse listResponse = customerStub.listConcerts(listRequest);
 
-        GetConcertResponse response = customerStub.getConcert(request);
+        ConcertShow show = null;
+        for (ConcertShow concert : listResponse.getShowsList()) {
+            if (concert.getId().equals(showId)) {
+                show = concert;
+                break;
+            }
+        }
 
-        if (response.getShow() == null || response.getShow().getId().isEmpty()) {
+        if (show == null) {
             System.out.println("Concert not found with ID: " + showId);
             return;
         }
-
-        ConcertShow show = response.getShow();
 
         System.out.println("\nCONCERT DETAILS");
         System.out.println("====================");
@@ -125,29 +133,30 @@ public class BulkBookingClient {
         }
     }
 
-    private void bookBulkTickets(Scanner userInput) {
-        System.out.println("\n--- BULK TICKET BOOKING FOR GROUPS ---");
+    private void reserveTickets(Scanner userInput) {
+        System.out.println("\n--- RESERVE CONCERT TICKETS ---");
         System.out.print("Enter concert ID: ");
         String showId = userInput.nextLine().trim();
 
-        
-        GetConcertRequest getConcertRequest = GetConcertRequest.newBuilder()
-                .setShowId(showId)
-                .build();
+        ListConcertsRequest listRequest = ListConcertsRequest.newBuilder().build();
+        ListConcertsResponse listResponse = customerStub.listConcerts(listRequest);
 
-        GetConcertResponse getConcertResponse = customerStub.getConcert(getConcertRequest);
+        ConcertShow show = null;
+        for (ConcertShow concert : listResponse.getShowsList()) {
+            if (concert.getId().equals(showId)) {
+                show = concert;
+                break;
+            }
+        }
 
-        if (getConcertResponse.getShow() == null || getConcertResponse.getShow().getId().isEmpty()) {
+        if (show == null) {
             System.out.println("Concert not found with ID: " + showId);
             return;
         }
 
-        ConcertShow show = getConcertResponse.getShow();
+        System.out.print("Enter your customer ID: ");
+        String customerId = userInput.nextLine().trim();
 
-        System.out.print("Enter group name or organization: ");
-        String groupName = userInput.nextLine().trim();
-
-        
         System.out.println("\nAvailable seat tiers:");
         for (int i = 0; i < show.getSeatTiersCount(); i++) {
             SeatTier tier = show.getSeatTiers(i);
@@ -159,17 +168,16 @@ public class BulkBookingClient {
         System.out.print("Enter seat type: ");
         String seatType = userInput.nextLine().trim();
 
-        System.out.print("Enter number of tickets for the group: ");
+        System.out.print("Enter number of tickets: ");
         int quantity = Integer.parseInt(userInput.nextLine().trim());
 
         boolean includeAfterParty = false;
 
         if (show.getHasAfterParty() && show.getAfterPartyTickets() > 0) {
-            System.out.print("Would you like to include after-party tickets for the group? (yes/no): ");
+            System.out.print("Would you like to include after-party tickets? (yes/no): ");
             includeAfterParty = userInput.nextLine().trim().equalsIgnoreCase("yes");
         }
 
-        
         double totalCost = 0.0;
 
         boolean foundTier = false;
@@ -186,25 +194,10 @@ public class BulkBookingClient {
             return;
         }
 
-        
-        double discountRate = 0.0;
-        if (quantity >= 20) {
-            discountRate = 0.15; 
-        } else if (quantity >= 10) {
-            discountRate = 0.10; 
-        } else if (quantity >= 5) {
-            discountRate = 0.05; 
-        }
-
-        double discountAmount = totalCost * discountRate;
-        double discountedTotal = totalCost - discountAmount;
-
-        
-        System.out.println("\nBULK BOOKING SUMMARY");
+        System.out.println("\nRESERVATION SUMMARY");
         System.out.println("====================");
         System.out.println("Concert: " + show.getName());
         System.out.println("Date: " + show.getDate());
-        System.out.println("Group Name: " + groupName);
         System.out.println("Seat Type: " + seatType);
         System.out.println("Number of Tickets: " + quantity);
 
@@ -212,42 +205,37 @@ public class BulkBookingClient {
             System.out.println("After-Party Tickets: Included");
         }
 
-        System.out.println("Subtotal: $" + String.format("%.2f", totalCost));
-        if (discountRate > 0) {
-            System.out.println("Group Discount (" + (discountRate * 100) + "%): -$" + String.format("%.2f", discountAmount));
-            System.out.println("Total Cost: $" + String.format("%.2f", discountedTotal));
-        } else {
-            System.out.println("Total Cost: $" + String.format("%.2f", totalCost));
-        }
-
-        System.out.print("\nConfirm bulk booking? (yes/no): ");
+        System.out.println("Total Cost: $" + String.format("%.2f", totalCost));
+        System.out.print("\nConfirm reservation? (yes/no): ");
         String confirmation = userInput.nextLine().trim();
 
         if (!confirmation.equalsIgnoreCase("yes")) {
-            System.out.println("Booking cancelled.");
+            System.out.println("Reservation cancelled.");
             return;
         }
 
-        
-        
-        String customerId = "GROUP-" + groupName.replaceAll("\\s+", "-") + "-" + System.currentTimeMillis();
-
         ReserveTicketRequest request = ReserveTicketRequest.newBuilder()
                 .setShowId(showId)
+                .setCustomerId(customerId)
                 .setSeatType(seatType)
                 .setQuantity(quantity)
                 .setIncludeAfterParty(includeAfterParty)
                 .setIsSentByPrimary(false)
-                .setCustomerId(customerId)
                 .build();
 
-        System.out.println("Sending bulk booking request...");
+        System.out.println("Request details: " +
+                "ShowID: " + request.getShowId() +
+                ", CustomerID: " + request.getCustomerId() +
+                ", SeatType: " + request.getSeatType() +
+                ", Quantity: " + request.getQuantity());
+        System.out.println("Sending reservation request...");
         ReserveTicketResponse response = customerStub.reserveTicket(request);
+        System.out.println("response..." + response.toString());
 
         if (response.getStatus()) {
-            System.out.println("Bulk booking successful! Reservation ID: " + response.getReservationId());
+            System.out.println("Reservation successful! Reservation ID: " + response.getReservationId());
         } else {
-            System.out.println("Bulk booking failed: " + response.getMessage());
+            System.out.println("Reservation failed: " + response.getMessage());
         }
     }
 }
