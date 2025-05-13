@@ -22,9 +22,9 @@ public class ConcertServer {
     private DistributedLock leaderLock;
     private int serverPort;
 
-    // Store concerts and reservations in memory
+    
     private Map<String, ConcertShow> concerts = new ConcurrentHashMap<>();
-    private Map<String, List<String>> reservations = new ConcurrentHashMap<>(); // concertId -> List of reservationIds
+    private Map<String, List<String>> reservations = new ConcurrentHashMap<>(); 
 
     private DistributedTx transaction;
     private ConcertOrganizerServiceImpl concertOrganizerService;
@@ -51,7 +51,7 @@ public class ConcertServer {
         concertOrganizerService = new ConcertOrganizerServiceImpl(this);
         boxOfficeService = new BoxOfficeServiceImpl(this);
         customerService = new CustomerServiceImpl(this);
-        transaction = new DistributedTxParticipant(concertOrganizerService); // Initially as participant
+        transaction = new DistributedTxParticipant(concertOrganizerService); 
     }
 
     public DistributedTx getTransaction() {
@@ -116,7 +116,7 @@ public class ConcertServer {
         }
     }
 
-    // Concert operations
+    
     public void addConcert(ConcertShow concert) {
         concerts.put(concert.getId(), concert);
         System.out.println("Added concert: " + concert.getName() + " with ID: " + concert.getId());
@@ -130,7 +130,7 @@ public class ConcertServer {
     public boolean cancelConcert(String concertId) {
         if (concerts.containsKey(concertId)) {
             concerts.remove(concertId);
-            // Also remove any reservations for this concert
+            
             reservations.remove(concertId);
             System.out.println("Cancelled concert with ID: " + concertId);
             return true;
@@ -146,14 +146,14 @@ public class ConcertServer {
         return new ArrayList<>(concerts.values());
     }
 
-    // Reservation operations
+    
     public synchronized String reserveTickets(String concertId, String seatType, int quantity, boolean includeAfterParty, String customerId) {
         ConcertShow concert = concerts.get(concertId);
         if (concert == null) {
-            return null; // Concert not found
+            return null; 
         }
 
-        // Find the seat tier
+        
         SeatTier targetTier = null;
         int tierIndex = -1;
         for (int i = 0; i < concert.getSeatTiersList().size(); i++) {
@@ -166,15 +166,15 @@ public class ConcertServer {
         }
 
         if (targetTier == null || targetTier.getAvailable() < quantity) {
-            return null; // Seat tier not found or not enough seats
+            return null; 
         }
 
-        // Check after-party tickets if needed
+        
         if (includeAfterParty && (concert.getAfterPartyTickets() < quantity || !concert.getHasAfterParty())) {
-            return null; // Not enough after-party tickets or no after-party
+            return null; 
         }
 
-        // Update seat availability
+        
         List<SeatTier> updatedTiers = new ArrayList<>(concert.getSeatTiersList());
         SeatTier updatedTier = SeatTier.newBuilder()
                 .setType(targetTier.getType())
@@ -183,7 +183,7 @@ public class ConcertServer {
                 .build();
         updatedTiers.set(tierIndex, updatedTier);
 
-        // Update after-party tickets if needed
+        
         ConcertShow.Builder updatedConcert = ConcertShow.newBuilder(concert)
                 .clearSeatTiers()
                 .addAllSeatTiers(updatedTiers);
@@ -192,10 +192,10 @@ public class ConcertServer {
             updatedConcert.setAfterPartyTickets(concert.getAfterPartyTickets() - quantity);
         }
 
-        // Update concert in the map
+        
         concerts.put(concertId, updatedConcert.build());
 
-        // Create reservation ID and store it
+        
         String reservationId = UUID.randomUUID().toString();
         reservations.computeIfAbsent(concertId, k -> new ArrayList<>()).add(reservationId);
 
@@ -210,12 +210,12 @@ public class ConcertServer {
     public synchronized boolean updateTicketStock(String concertId, String seatType, int additionalTickets, int additionalAfterPartyTickets) {
         ConcertShow concert = concerts.get(concertId);
         if (concert == null) {
-            return false; // Concert not found
+            return false; 
         }
 
         ConcertShow.Builder updatedConcert = ConcertShow.newBuilder(concert);
 
-        // Update seat tier if specified
+        
         if (seatType != null && !seatType.isEmpty()) {
             List<SeatTier> updatedTiers = new ArrayList<>(concert.getSeatTiersList());
             boolean found = false;
@@ -232,11 +232,11 @@ public class ConcertServer {
                 }
             }
 
-            // If the tier wasn't found, add a new one
+            
             if (!found && additionalTickets > 0) {
                 SeatTier newTier = SeatTier.newBuilder()
                         .setType(seatType)
-                        .setPrice(0.0) // Default price, can be updated later
+                        .setPrice(0.0) 
                         .setAvailable(additionalTickets)
                         .build();
                 updatedTiers.add(newTier);
@@ -245,17 +245,17 @@ public class ConcertServer {
             updatedConcert.clearSeatTiers().addAllSeatTiers(updatedTiers);
         }
 
-        // Update after-party tickets if needed
+        
         if (additionalAfterPartyTickets != 0) {
             updatedConcert.setAfterPartyTickets(concert.getAfterPartyTickets() + additionalAfterPartyTickets);
 
-            // Ensure hasAfterParty is set if adding after-party tickets
+            
             if (additionalAfterPartyTickets > 0 && !concert.getHasAfterParty()) {
                 updatedConcert.setHasAfterParty(true);
             }
         }
 
-        // Update concert in the map
+        
         concerts.put(concertId, updatedConcert.build());
 
         System.out.println("Updated ticket stock for concert " + concertId +
@@ -266,14 +266,14 @@ public class ConcertServer {
     }
 
     public synchronized byte[] getServerState() {
-        // This method will be used to synchronize state with new or recovered nodes
-        // In a real implementation, we would serialize the entire state
+        
+        
         return "State serialization placeholder".getBytes();
     }
 
     public synchronized void loadServerState(byte[] state) {
-        // This method will be used to load state when a node joins or recovers
-        // In a real implementation, we would deserialize the state
+        
+        
         System.out.println("Loading server state");
     }
 
@@ -296,10 +296,10 @@ public class ConcertServer {
         isLeader.set(true);
         transaction = new DistributedTxCoordinator(concertOrganizerService);
 
-        // When becoming leader, sync with other nodes to ensure highest consistency
+        
         try {
             System.out.println("Synchronizing with other nodes as new leader");
-            // In a real implementation, this would implement a more sophisticated sync protocol
+            
         } catch (Exception e) {
             e.printStackTrace();
         }

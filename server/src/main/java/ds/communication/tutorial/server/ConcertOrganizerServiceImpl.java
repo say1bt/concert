@@ -29,7 +29,7 @@ public class ConcertOrganizerServiceImpl extends ConcertOrganizerServiceGrpc.Con
         ConcertShow show = request.getShow();
 
         if (server.isLeader()) {
-            // Act as primary
+            
             try {
                 System.out.println("Adding concert as Primary");
                 startDistributedTx("ADD_CONCERT", show);
@@ -42,7 +42,7 @@ public class ConcertOrganizerServiceImpl extends ConcertOrganizerServiceGrpc.Con
                 transactionStatus = false;
             }
         } else {
-            // Act as Secondary
+            
             if (request.getIsSentByPrimary()) {
                 System.out.println("Adding concert on secondary, on Primary's command");
                 startDistributedTx("ADD_CONCERT", show);
@@ -67,7 +67,7 @@ public class ConcertOrganizerServiceImpl extends ConcertOrganizerServiceGrpc.Con
         ConcertShow updatedShow = request.getUpdatedShow();
 
         if (server.isLeader()) {
-            // Act as primary
+            
             try {
                 System.out.println("Updating concert as Primary");
                 startDistributedTx("UPDATE_CONCERT", updatedShow);
@@ -80,7 +80,7 @@ public class ConcertOrganizerServiceImpl extends ConcertOrganizerServiceGrpc.Con
                 transactionStatus = false;
             }
         } else {
-            // Act as Secondary
+            
             if (request.getIsSentByPrimary()) {
                 System.out.println("Updating concert on secondary, on Primary's command");
                 startDistributedTx("UPDATE_CONCERT", updatedShow);
@@ -105,7 +105,7 @@ public class ConcertOrganizerServiceImpl extends ConcertOrganizerServiceGrpc.Con
         String showId = request.getShowId();
 
         if (server.isLeader()) {
-            // Act as primary
+            
             try {
                 System.out.println("Cancelling concert as Primary");
                 startDistributedTx("CANCEL_CONCERT", showId);
@@ -118,7 +118,7 @@ public class ConcertOrganizerServiceImpl extends ConcertOrganizerServiceGrpc.Con
                 transactionStatus = false;
             }
         } else {
-            // Act as Secondary
+            
             if (request.getIsSentByPrimary()) {
                 System.out.println("Cancelling concert on secondary, on Primary's command");
                 startDistributedTx("CANCEL_CONCERT", showId);
@@ -138,7 +138,7 @@ public class ConcertOrganizerServiceImpl extends ConcertOrganizerServiceGrpc.Con
         responseObserver.onCompleted();
     }
 
-    // Helper methods
+    
     private void startDistributedTx(String operation, Object data) {
         try {
             server.getTransaction().start(operation, String.valueOf(UUID.randomUUID()));
@@ -152,7 +152,7 @@ public class ConcertOrganizerServiceImpl extends ConcertOrganizerServiceGrpc.Con
     public void onGlobalCommit() {
         if (tempDataHolder instanceof ConcertShow) {
             if (((ConcertShow) tempDataHolder).getId().isEmpty()) {
-                // Handle empty ID case if needed
+                
                 return;
             }
             server.addConcert((ConcertShow) tempDataHolder);

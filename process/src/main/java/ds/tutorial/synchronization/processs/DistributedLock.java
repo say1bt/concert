@@ -131,7 +131,7 @@ public class DistributedLock implements Watcher {
 
         if (Event.KeeperState.SyncConnected == state) {
             if (Event.EventType.None == type) {
-                // Identify successful connection
+                
                 System.out.println("Successful connected to the server");
                 startFlag.countDown();
             }

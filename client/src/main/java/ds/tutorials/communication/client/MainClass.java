@@ -1,9 +1,6 @@
 package ds.tutorials.communication.client;
 
-/**
- * Main entry point for the Concert Booking System client application.
- * Supports multiple user modes: organizer, customer, box office, and coordinator.
- */
+
 public class MainClass {
     public static void main(String[] args) throws InterruptedException {
         if (args.length != 3) {
@@ -16,11 +13,11 @@ public class MainClass {
         int port = Integer.parseInt(args[1].trim());
         String mode = args[2].toLowerCase();
 
-        // Standard Java 8 switch statement
+        
         switch (mode) {
             case "o":
             case "organizer":
-                // Organizer mode - for adding/updating/cancelling concerts
+                
                 ConcertManagementClient organizerClient = new ConcertManagementClient(host, port);
                 organizerClient.initializeConnection();
                 organizerClient.processUserRequests();
@@ -29,7 +26,7 @@ public class MainClass {
 
             case "c":
             case "customer":
-                // Customer mode - for booking tickets
+                
                 TicketBookingClient customerClient = new TicketBookingClient(host, port);
                 customerClient.initializeConnection();
                 customerClient.processUserRequests();
@@ -38,11 +35,11 @@ public class MainClass {
 
             case "b":
             case "boxoffice":
-                // Box office mode - for updating ticket inventory
-                ConcertManagementClient boxOfficeClient = new ConcertManagementClient(host, port);
+                
+                BoxOfficeClient boxOfficeClient = new BoxOfficeClient(host, port);
                 boxOfficeClient.initializeConnection();
 
-                // Display a simplified box office menu
+                
                 System.out.println("\n=============================================");
                 System.out.println("CONCERT BOOKING SYSTEM - BOX OFFICE MODE");
                 System.out.println("=============================================");
@@ -54,7 +51,7 @@ public class MainClass {
 
             case "e":
             case "coordinator":
-                // Event coordinator mode - for bulk bookings
+                
                 BulkBookingClient coordinatorClient = new BulkBookingClient(host, port);
                 coordinatorClient.initializeConnection();
                 coordinatorClient.processUserRequests();

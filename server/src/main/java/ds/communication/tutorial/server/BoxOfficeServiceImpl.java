@@ -32,7 +32,7 @@ public class BoxOfficeServiceImpl extends BoxOfficeServiceGrpc.BoxOfficeServiceI
         int additionalAfterPartyTickets = request.getAdditionalAfterPartyTickets();
 
         if (server.isLeader()) {
-            // Act as primary
+            
             try {
                 System.out.println("Updating ticket stock as Primary");
                 startDistributedTx(request);
@@ -45,7 +45,7 @@ public class BoxOfficeServiceImpl extends BoxOfficeServiceGrpc.BoxOfficeServiceI
                 transactionStatus = false;
             }
         } else {
-            // Act as Secondary
+            
             if (request.getIsSentByPrimary()) {
                 System.out.println("Updating ticket stock on secondary, on Primary's command");
                 startDistributedTx(request);
@@ -65,7 +65,7 @@ public class BoxOfficeServiceImpl extends BoxOfficeServiceGrpc.BoxOfficeServiceI
         responseObserver.onCompleted();
     }
 
-    // Helper methods
+    
     private void startDistributedTx(UpdateTicketStockRequest request) {
         try {
             server.getTransaction().start("UPDATE_TICKET_STOCK", String.valueOf(UUID.randomUUID()));

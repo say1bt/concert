@@ -5,12 +5,15 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 
 import java.util.Scanner;
+import java.util.UUID;
 
 public class ConcertManagementClient {
     private ManagedChannel channel = null;
-    ConcertManagementServiceGrpc.ConcertManagementServiceBlockingStub clientStub = null;
-    String host = null;
-    int port = -1;
+    private ConcertOrganizerServiceGrpc.ConcertOrganizerServiceBlockingStub organizerStub = null;
+    private BoxOfficeServiceGrpc.BoxOfficeServiceBlockingStub boxOfficeStub = null;
+    private CustomerServiceGrpc.CustomerServiceBlockingStub customerStub = null;
+    private String host = null;
+    private int port = -1;
 
     public ConcertManagementClient(String host, int port) {
         this.host = host;
@@ -22,7 +25,9 @@ public class ConcertManagementClient {
         channel = ManagedChannelBuilder.forAddress("localhost", port)
                 .usePlaintext()
                 .build();
-        clientStub = ConcertManagementServiceGrpc.newBlockingStub(channel);
+        organizerStub = ConcertOrganizerServiceGrpc.newBlockingStub(channel);
+        boxOfficeStub = BoxOfficeServiceGrpc.newBlockingStub(channel);
+        customerStub = CustomerServiceGrpc.newBlockingStub(channel);
     }
 
     public void closeConnection() {
@@ -40,7 +45,8 @@ public class ConcertManagementClient {
             System.out.println("3. Cancel concert");
             System.out.println("4. List all concerts");
             System.out.println("5. View concert details");
-            System.out.println("6. Update ticket inventory (Box Office)");
+            System.out.println("6. Update ticket stock (Box Office)");
+            System.out.println("7. Reserve tickets (Customer)");
             System.out.println("0. Exit");
             System.out.print("Enter your choice: ");
 
@@ -65,7 +71,10 @@ public class ConcertManagementClient {
                     viewConcertDetails(userInput);
                     break;
                 case 6:
-                    updateTicketInventory(userInput);
+                    updateTicketStock(userInput);
+                    break;
+                case 7:
+                    reserveTickets(userInput);
                     break;
                 default:
                     System.out.println("Invalid choice. Please try again.");
@@ -82,39 +91,37 @@ public class ConcertManagementClient {
         System.out.print("Enter concert date (YYYY-MM-DD): ");
         String date = userInput.nextLine().trim();
 
-        System.out.print("Enter concert location: ");
-        String location = userInput.nextLine().trim();
+        System.out.print("Enter venue: ");
+        String venue = userInput.nextLine().trim();
+
+        System.out.print("Enter description: ");
+        String description = userInput.nextLine().trim();
 
         System.out.print("Does this concert have an after-party? (yes/no): ");
         boolean hasAfterParty = userInput.nextLine().trim().equalsIgnoreCase("yes");
 
         int afterPartyTickets = 0;
-        double afterPartyPrice = 0.0;
         if (hasAfterParty) {
             System.out.print("Enter number of after-party tickets available: ");
             afterPartyTickets = Integer.parseInt(userInput.nextLine().trim());
-
-            System.out.print("Enter after-party ticket price: ");
-            afterPartyPrice = Double.parseDouble(userInput.nextLine().trim());
         }
 
         System.out.print("How many seat tiers does this concert have? ");
         int numTiers = Integer.parseInt(userInput.nextLine().trim());
 
-        Concert.Builder concertBuilder = Concert.newBuilder()
-                .setConcertId(java.util.UUID.randomUUID().toString())
+        ConcertShow.Builder showBuilder = ConcertShow.newBuilder()
+                .setId(UUID.randomUUID().toString())
                 .setName(name)
                 .setDate(date)
-                .setLocation(location)
+                .setVenue(venue)
+                .setDescription(description)
                 .setHasAfterParty(hasAfterParty)
-                .setAfterPartyTicketsAvailable(afterPartyTickets)
-                .setAfterPartyTicketPrice(afterPartyPrice)
-                .setIsCancelled(false);
+                .setAfterPartyTickets(afterPartyTickets);
 
         for (int i = 0; i < numTiers; i++) {
             System.out.println("\n--- SEAT TIER " + (i+1) + " ---");
-            System.out.print("Enter tier name (e.g., Regular, VIP): ");
-            String tierName = userInput.nextLine().trim();
+            System.out.print("Enter tier type (e.g., Regular, VIP): ");
+            String tierType = userInput.nextLine().trim();
 
             System.out.print("Enter number of available seats: ");
             int availableSeats = Integer.parseInt(userInput.nextLine().trim());
@@ -123,22 +130,22 @@ public class ConcertManagementClient {
             double price = Double.parseDouble(userInput.nextLine().trim());
 
             SeatTier seatTier = SeatTier.newBuilder()
-                    .setTierName(tierName)
-                    .setAvailableSeats(availableSeats)
+                    .setType(tierType)
+                    .setAvailable(availableSeats)
                     .setPrice(price)
                     .build();
 
-            concertBuilder.addSeatTiers(seatTier);
+            showBuilder.addSeatTiers(seatTier);
         }
 
-        Concert concert = concertBuilder.build();
+        ConcertShow show = showBuilder.build();
         AddConcertRequest request = AddConcertRequest.newBuilder()
-                .setConcert(concert)
+                .setShow(show)
                 .setIsSentByPrimary(false)
                 .build();
 
         System.out.println("Sending request to add new concert...");
-        AddConcertResponse response = clientStub.addConcert(request);
+        AddConcertResponse response = organizerStub.addConcert(request);
 
         if (response.getStatus()) {
             System.out.println("Concert added successfully!");
@@ -150,40 +157,46 @@ public class ConcertManagementClient {
     private void updateConcertDetails(Scanner userInput) {
         System.out.println("\n--- UPDATE CONCERT DETAILS ---");
         System.out.print("Enter concert ID to update: ");
-        String concertId = userInput.nextLine().trim();
+        String showId = userInput.nextLine().trim();
 
-        // First fetch the current concert details
+        
         GetConcertRequest getConcertRequest = GetConcertRequest.newBuilder()
-                .setConcertId(concertId)
+                .setShowId(showId)
                 .build();
 
-        GetConcertResponse getConcertResponse = clientStub.getConcert(getConcertRequest);
-        if (getConcertResponse.getConcert() == null || getConcertResponse.getConcert().getConcertId().isEmpty()) {
-            System.out.println("Concert not found with ID: " + concertId);
+        GetConcertResponse getConcertResponse = customerStub.getConcert(getConcertRequest);
+        if (getConcertResponse.getShow() == null || getConcertResponse.getShow().getId().isEmpty()) {
+            System.out.println("Concert not found with ID: " + showId);
             return;
         }
 
-        Concert oldConcert = getConcertResponse.getConcert();
-        Concert.Builder updatedConcertBuilder = oldConcert.toBuilder();
+        ConcertShow oldShow = getConcertResponse.getShow();
+        ConcertShow.Builder updatedShowBuilder = oldShow.toBuilder();
 
-        System.out.println("Current details: " + oldConcert.getName() + " at " + oldConcert.getLocation() + " on " + oldConcert.getDate());
+        System.out.println("Current details: " + oldShow.getName() + " at " + oldShow.getVenue() + " on " + oldShow.getDate());
 
         System.out.print("Enter new name (or press Enter to keep current): ");
         String newName = userInput.nextLine().trim();
         if (!newName.isEmpty()) {
-            updatedConcertBuilder.setName(newName);
+            updatedShowBuilder.setName(newName);
         }
 
         System.out.print("Enter new date (YYYY-MM-DD) (or press Enter to keep current): ");
         String newDate = userInput.nextLine().trim();
         if (!newDate.isEmpty()) {
-            updatedConcertBuilder.setDate(newDate);
+            updatedShowBuilder.setDate(newDate);
         }
 
-        System.out.print("Enter new location (or press Enter to keep current): ");
-        String newLocation = userInput.nextLine().trim();
-        if (!newLocation.isEmpty()) {
-            updatedConcertBuilder.setLocation(newLocation);
+        System.out.print("Enter new venue (or press Enter to keep current): ");
+        String newVenue = userInput.nextLine().trim();
+        if (!newVenue.isEmpty()) {
+            updatedShowBuilder.setVenue(newVenue);
+        }
+
+        System.out.print("Enter new description (or press Enter to keep current): ");
+        String newDescription = userInput.nextLine().trim();
+        if (!newDescription.isEmpty()) {
+            updatedShowBuilder.setDescription(newDescription);
         }
 
         System.out.print("Update after-party status? (yes/no): ");
@@ -191,34 +204,29 @@ public class ConcertManagementClient {
         if (updateAfterParty.equalsIgnoreCase("yes")) {
             System.out.print("Does this concert have an after-party? (yes/no): ");
             boolean hasAfterParty = userInput.nextLine().trim().equalsIgnoreCase("yes");
-            updatedConcertBuilder.setHasAfterParty(hasAfterParty);
+            updatedShowBuilder.setHasAfterParty(hasAfterParty);
 
             if (hasAfterParty) {
                 System.out.print("Enter number of after-party tickets available: ");
                 int afterPartyTickets = Integer.parseInt(userInput.nextLine().trim());
-                updatedConcertBuilder.setAfterPartyTicketsAvailable(afterPartyTickets);
-
-                System.out.print("Enter after-party ticket price: ");
-                double afterPartyPrice = Double.parseDouble(userInput.nextLine().trim());
-                updatedConcertBuilder.setAfterPartyTicketPrice(afterPartyPrice);
+                updatedShowBuilder.setAfterPartyTickets(afterPartyTickets);
             } else {
-                updatedConcertBuilder.setAfterPartyTicketsAvailable(0);
-                updatedConcertBuilder.setAfterPartyTicketPrice(0.0);
+                updatedShowBuilder.setAfterPartyTickets(0);
             }
         }
 
         System.out.print("Update seat tiers? (yes/no): ");
         String updateSeatTiers = userInput.nextLine().trim();
         if (updateSeatTiers.equalsIgnoreCase("yes")) {
-            updatedConcertBuilder.clearSeatTiers();
+            updatedShowBuilder.clearSeatTiers();
 
             System.out.print("How many seat tiers will this concert have? ");
             int numTiers = Integer.parseInt(userInput.nextLine().trim());
 
             for (int i = 0; i < numTiers; i++) {
                 System.out.println("\n--- SEAT TIER " + (i+1) + " ---");
-                System.out.print("Enter tier name (e.g., Regular, VIP): ");
-                String tierName = userInput.nextLine().trim();
+                System.out.print("Enter tier type (e.g., Regular, VIP): ");
+                String tierType = userInput.nextLine().trim();
 
                 System.out.print("Enter number of available seats: ");
                 int availableSeats = Integer.parseInt(userInput.nextLine().trim());
@@ -227,23 +235,24 @@ public class ConcertManagementClient {
                 double price = Double.parseDouble(userInput.nextLine().trim());
 
                 SeatTier seatTier = SeatTier.newBuilder()
-                        .setTierName(tierName)
-                        .setAvailableSeats(availableSeats)
+                        .setType(tierType)
+                        .setAvailable(availableSeats)
                         .setPrice(price)
                         .build();
 
-                updatedConcertBuilder.addSeatTiers(seatTier);
+                updatedShowBuilder.addSeatTiers(seatTier);
             }
         }
 
-        Concert updatedConcert = updatedConcertBuilder.build();
+        ConcertShow updatedShow = updatedShowBuilder.build();
         UpdateConcertRequest request = UpdateConcertRequest.newBuilder()
-                .setConcert(updatedConcert)
+                .setShowId(showId)
+                .setUpdatedShow(updatedShow)
                 .setIsSentByPrimary(false)
                 .build();
 
         System.out.println("Sending request to update concert...");
-        UpdateConcertResponse response = clientStub.updateConcert(request);
+        UpdateConcertResponse response = organizerStub.updateConcert(request);
 
         if (response.getStatus()) {
             System.out.println("Concert updated successfully!");
@@ -255,7 +264,7 @@ public class ConcertManagementClient {
     private void cancelConcert(Scanner userInput) {
         System.out.println("\n--- CANCEL CONCERT ---");
         System.out.print("Enter concert ID to cancel: ");
-        String concertId = userInput.nextLine().trim();
+        String showId = userInput.nextLine().trim();
 
         System.out.print("Are you sure you want to cancel this concert? (yes/no): ");
         String confirmation = userInput.nextLine().trim();
@@ -266,12 +275,12 @@ public class ConcertManagementClient {
         }
 
         CancelConcertRequest request = CancelConcertRequest.newBuilder()
-                .setConcertId(concertId)
+                .setShowId(showId)
                 .setIsSentByPrimary(false)
                 .build();
 
         System.out.println("Sending request to cancel concert...");
-        CancelConcertResponse response = clientStub.cancelConcert(request);
+        CancelConcertResponse response = organizerStub.cancelConcert(request);
 
         if (response.getStatus()) {
             System.out.println("Concert cancelled successfully!");
@@ -284,98 +293,132 @@ public class ConcertManagementClient {
         System.out.println("\n--- LIST ALL CONCERTS ---");
 
         ListConcertsRequest request = ListConcertsRequest.newBuilder().build();
-        ListConcertsResponse response = clientStub.listConcerts(request);
+        ListConcertsResponse response = customerStub.listConcerts(request);
 
-        if (response.getConcertsCount() == 0) {
+        if (response.getShowsCount() == 0) {
             System.out.println("No concerts available.");
             return;
         }
 
         System.out.println("Available concerts:");
         System.out.println("-------------------");
-        for (Concert concert : response.getConcertsList()) {
-            if (!concert.getIsCancelled()) {
-                System.out.println("ID: " + concert.getConcertId());
-                System.out.println("Name: " + concert.getName());
-                System.out.println("Date: " + concert.getDate());
-                System.out.println("Location: " + concert.getLocation());
-                System.out.println("Has After-Party: " + (concert.getHasAfterParty() ? "Yes" : "No"));
-                System.out.println("-------------------");
-            }
+        for (ConcertShow show : response.getShowsList()) {
+            System.out.println("ID: " + show.getId());
+            System.out.println("Name: " + show.getName());
+            System.out.println("Date: " + show.getDate());
+            System.out.println("Venue: " + show.getVenue());
+            System.out.println("Has After-Party: " + (show.getHasAfterParty() ? "Yes" : "No"));
+            System.out.println("-------------------");
         }
     }
 
     private void viewConcertDetails(Scanner userInput) {
         System.out.println("\n--- VIEW CONCERT DETAILS ---");
         System.out.print("Enter concert ID: ");
-        String concertId = userInput.nextLine().trim();
+        String showId = userInput.nextLine().trim();
 
         GetConcertRequest request = GetConcertRequest.newBuilder()
-                .setConcertId(concertId)
+                .setShowId(showId)
                 .build();
 
-        GetConcertResponse response = clientStub.getConcert(request);
+        GetConcertResponse response = customerStub.getConcert(request);
 
-        if (response.getConcert() == null || response.getConcert().getConcertId().isEmpty()) {
-            System.out.println("Concert not found with ID: " + concertId);
+        if (response.getShow() == null || response.getShow().getId().isEmpty()) {
+            System.out.println("Concert not found with ID: " + showId);
             return;
         }
 
-        Concert concert = response.getConcert();
+        ConcertShow show = response.getShow();
 
         System.out.println("\nCONCERT DETAILS");
         System.out.println("====================");
-        System.out.println("ID: " + concert.getConcertId());
-        System.out.println("Name: " + concert.getName());
-        System.out.println("Date: " + concert.getDate());
-        System.out.println("Location: " + concert.getLocation());
-        System.out.println("Status: " + (concert.getIsCancelled() ? "CANCELLED" : "ACTIVE"));
+        System.out.println("ID: " + show.getId());
+        System.out.println("Name: " + show.getName());
+        System.out.println("Date: " + show.getDate());
+        System.out.println("Venue: " + show.getVenue());
+        System.out.println("Description: " + show.getDescription());
 
         System.out.println("\nSEAT TIERS");
         System.out.println("====================");
-        for (SeatTier tier : concert.getSeatTiersList()) {
-            System.out.println(tier.getTierName() + " - "
-                    + tier.getAvailableSeats() + " seats available at $"
+        for (SeatTier tier : show.getSeatTiersList()) {
+            System.out.println(tier.getType() + " - "
+                    + tier.getAvailable() + " seats available at $"
                     + String.format("%.2f", tier.getPrice()) + " each");
         }
 
-        if (concert.getHasAfterParty()) {
+        if (show.getHasAfterParty()) {
             System.out.println("\nAFTER-PARTY");
             System.out.println("====================");
-            System.out.println("Available tickets: " + concert.getAfterPartyTicketsAvailable());
-            System.out.println("Price: $" + String.format("%.2f", concert.getAfterPartyTicketPrice()));
+            System.out.println("Available tickets: " + show.getAfterPartyTickets());
         }
     }
 
-    private void updateTicketInventory(Scanner userInput) {
-        System.out.println("\n--- UPDATE TICKET INVENTORY (BOX OFFICE) ---");
+    private void updateTicketStock(Scanner userInput) {
+        System.out.println("\n--- UPDATE TICKET STOCK (BOX OFFICE) ---");
         System.out.print("Enter concert ID: ");
-        String concertId = userInput.nextLine().trim();
+        String showId = userInput.nextLine().trim();
 
-        System.out.print("Enter seat tier name to update (e.g., Regular, VIP): ");
-        String seatTier = userInput.nextLine().trim();
+        System.out.print("Enter seat type to update (e.g., Regular, VIP): ");
+        String seatType = userInput.nextLine().trim();
 
-        System.out.print("Enter number of additional seats (can be negative to reduce): ");
-        int additionalSeats = Integer.parseInt(userInput.nextLine().trim());
+        System.out.print("Enter number of additional tickets (can be negative to reduce): ");
+        int additionalTickets = Integer.parseInt(userInput.nextLine().trim());
 
         System.out.print("Enter number of additional after-party tickets (can be negative to reduce): ");
         int additionalAfterPartyTickets = Integer.parseInt(userInput.nextLine().trim());
 
-        UpdateTicketInventoryRequest request = UpdateTicketInventoryRequest.newBuilder()
-                .setConcertId(concertId)
-                .setSeatTier(seatTier)
-                .setAdditionalSeats(additionalSeats)
+        UpdateTicketStockRequest request = UpdateTicketStockRequest.newBuilder()
+                .setShowId(showId)
+                .setSeatType(seatType)
+                .setAdditionalTickets(additionalTickets)
                 .setAdditionalAfterPartyTickets(additionalAfterPartyTickets)
                 .setIsSentByPrimary(false)
                 .build();
 
-        System.out.println("Sending request to update ticket inventory...");
-        UpdateTicketInventoryResponse response = clientStub.updateTicketInventory(request);
+        System.out.println("Sending request to update ticket stock...");
+        UpdateTicketStockResponse response = boxOfficeStub.updateTicketStock(request);
 
         if (response.getStatus()) {
-            System.out.println("Ticket inventory updated successfully!");
+            System.out.println("Ticket stock updated successfully!");
         } else {
-            System.out.println("Failed to update ticket inventory: " + response.getMessage());
+            System.out.println("Failed to update ticket stock: " + response.getMessage());
+        }
+    }
+
+    private void reserveTickets(Scanner userInput) {
+        System.out.println("\n--- RESERVE TICKETS (CUSTOMER) ---");
+        System.out.print("Enter customer ID: ");
+        String customerId = userInput.nextLine().trim();
+
+        System.out.print("Enter concert ID: ");
+        String showId = userInput.nextLine().trim();
+
+        System.out.print("Enter seat type (e.g., Regular, VIP): ");
+        String seatType = userInput.nextLine().trim();
+
+        System.out.print("Enter number of tickets to reserve: ");
+        int quantity = Integer.parseInt(userInput.nextLine().trim());
+
+        System.out.print("Include after-party tickets? (yes/no): ");
+        boolean includeAfterParty = userInput.nextLine().trim().equalsIgnoreCase("yes");
+
+        ReserveTicketRequest request = ReserveTicketRequest.newBuilder()
+                .setShowId(showId)
+                .setSeatType(seatType)
+                .setQuantity(quantity)
+                .setIncludeAfterParty(includeAfterParty)
+                .setIsSentByPrimary(false)
+                .setCustomerId(customerId)
+                .build();
+
+        System.out.println("Sending request to reserve tickets...");
+        ReserveTicketResponse response = customerStub.reserveTicket(request);
+
+        if (response.getStatus()) {
+            System.out.println("Tickets reserved successfully!");
+            System.out.println("Reservation ID: " + response.getReservationId());
+        } else {
+            System.out.println("Failed to reserve tickets: " + response.getMessage());
         }
     }
 }
