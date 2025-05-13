@@ -1,0 +1,131 @@
+syntax = "proto3";
+option java_multiple_files = true;
+package ds.tutorial.communication.grpc.generated;
+
+// Concert data model
+message Concert {
+    string concertId = 1;
+    string name = 2;
+    string date = 3;
+    string location = 4;
+    bool hasAfterParty = 5;
+    repeated SeatTier seatTiers = 6;
+    int32 afterPartyTicketsAvailable = 7;
+    double afterPartyTicketPrice = 8;
+    bool isCancelled = 9;
+}
+
+// Seat tier information
+message SeatTier {
+    string tierName = 1;
+    int32 availableSeats = 2;
+    double price = 3;
+}
+
+// Request to add a new concert
+message AddConcertRequest {
+    Concert concert = 1;
+    bool isSentByPrimary = 2;
+}
+
+// Response for adding a concert
+message AddConcertResponse {
+    bool status = 1;
+    string message = 2;
+}
+
+// Request to update a concert
+message UpdateConcertRequest {
+    Concert concert = 1;
+    bool isSentByPrimary = 2;
+}
+
+// Response for updating a concert
+message UpdateConcertResponse {
+    bool status = 1;
+    string message = 2;
+}
+
+// Request to cancel a concert
+message CancelConcertRequest {
+    string concertId = 1;
+    bool isSentByPrimary = 2;
+}
+
+// Response for cancelling a concert
+message CancelConcertResponse {
+    bool status = 1;
+    string message = 2;
+}
+
+// Request to view available concerts
+message ListConcertsRequest {
+}
+
+// Response with list of available concerts
+message ListConcertsResponse {
+    repeated Concert concerts = 1;
+}
+
+// Request to view a specific concert details
+message GetConcertRequest {
+    string concertId = 1;
+}
+
+// Response with concert details
+message GetConcertResponse {
+    Concert concert = 1;
+}
+
+// Request to book tickets
+message BookTicketsRequest {
+    string concertId = 1;
+    string customerName = 2;
+    string seatTier = 3;
+    int32 numTickets = 4;
+    bool includeAfterParty = 5;
+    int32 numAfterPartyTickets = 6;
+    bool isSentByPrimary = 7;
+}
+
+// Response for booking tickets
+message BookTicketsResponse {
+    bool status = 1;
+    string message = 2;
+    string bookingId = 3;
+}
+
+// Request to update ticket inventory
+message UpdateTicketInventoryRequest {
+    string concertId = 1;
+    string seatTier = 2;
+    int32 additionalSeats = 3;
+    int32 additionalAfterPartyTickets = 4;
+    bool isSentByPrimary = 5;
+}
+
+// Response for updating ticket inventory
+message UpdateTicketInventoryResponse {
+    bool status = 1;
+    string message = 2;
+}
+
+// Concert management service
+service ConcertManagementService {
+    // Organizer functions
+    rpc addConcert(AddConcertRequest) returns (AddConcertResponse);
+    rpc updateConcert(UpdateConcertRequest) returns (UpdateConcertResponse);
+    rpc cancelConcert(CancelConcertRequest) returns (CancelConcertResponse);
+
+    // Box office clerk functions
+    rpc updateTicketInventory(UpdateTicketInventoryRequest) returns (UpdateTicketInventoryResponse);
+
+    // Common functions
+    rpc listConcerts(ListConcertsRequest) returns (ListConcertsResponse);
+    rpc getConcert(GetConcertRequest) returns (GetConcertResponse);
+}
+
+// Ticket booking service
+service TicketBookingService {
+    rpc bookTickets(BookTicketsRequest) returns (BookTicketsResponse);
+}
